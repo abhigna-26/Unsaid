@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "thought-catcher-app",
+    "development": "thought-catcher-dev",
+    "production": "thought-catcher-prod"
+  }
+}

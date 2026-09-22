@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function isAccountActive(uid) {
+      return !exists(/databases/$(database)/documents/users/$(uid)) ||
+        (
+          get(/databases/$(database)/documents/users/$(uid)).data.account_status == 'active' ||
+          !('account_status' in get(/databases/$(database)/documents/users/$(uid)).data)
+        );
+    }
+
+    function isCaptureOwner(captureId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/captures/$(captureId)) &&
+        get(/databases/$(database)/documents/captures/$(captureId)).data.user_id == request.auth.uid;
+    }
+
+    function serverFieldsUnchanged(protectedFields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedFields);
+    }
+
+    // =========================================================================
+    // USERS COLLECTION
+    // =========================================================================
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid) &&
+        request.resource.data.uid == uid &&
+        (!('plan' in request.resource.data) || request.resource.data.plan == 'free') &&
+        (!('revenuecat_customer_id' in request.resource.data)) &&
+        (!('account_status' in request.resource.data) || request.resource.data.account_status == 'active') &&
+        (!('deleted_at' in request.resource.data)) &&
+        (!('deletion_scheduled_for' in request.resource.data));
+
+      allow update: if isOwner(uid) &&
+        isAccountActive(uid) &&
+        serverFieldsUnchanged(['plan', 'revenuecat_customer_id', 'account_status', 'deleted_at', 'deletion_scheduled_for']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // DEVICES COLLECTION
+    // =========================================================================
+    match /devices/{deviceId} {
+      allow read: if isAuthenticated() && (
+        !('user_id' in resource.data) || resource.data.user_id == null || resource.data.user_id == request.auth.uid
+      );
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.device_id == deviceId &&
+        (!('daily_enrichment_count' in request.resource.data) || request.resource.data.daily_enrichment_count == 0) &&
+        (!('weekly_enrichment_count' in request.resource.data) || request.resource.data.weekly_enrichment_count == 0);
+
+      allow update: if isAuthenticated() &&
+        (resource.data.user_id == null || resource.data.user_id == request.auth.uid) &&
+        serverFieldsUnchanged(['daily_enrichment_count', 'weekly_enrichment_count', 'daily_reset_at', 'weekly_reset_at']);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // CAPTURES COLLECTION
+    // =========================================================================
+    match /captures/{captureId} {
+      allow read: if isAuthenticated() &&
+        resource.data.user_id == request.auth.uid &&
+        isAccountActive(request.auth.uid);
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.id == captureId &&
+        request.resource.data.user_id == request.auth.uid &&
+        isAccountActive(request.auth.uid) &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 20000 &&
+        (!('enrichment_status' in request.resource.data) || request.resource.data.enrichment_status == 'pending');
+
+      allow update: if isAuthenticated() &&
+        resource.data.user_id == request.auth.uid &&
+        request.resource.data.user_id == request.auth.uid &&
+        isAccountActive(request.auth.uid) &&
+        serverFieldsUnchanged(['enrichment_status']);
+
+      allow delete: if isAuthenticated() &&
+        resource.data.user_id == request.auth.uid &&
+        isAccountActive(request.auth.uid);
+    }
+
+    // =========================================================================
+    // ENRICHMENTS COLLECTION
+    // =========================================================================
+    match /enrichments/{captureId} {
+      allow read: if isCaptureOwner(captureId) && isAccountActive(request.auth.uid);
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // USAGE COLLECTION
+    // =========================================================================
+    match /usage/{ownerId} {
+      allow read: if isOwner(ownerId);
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // ENTITLEMENTS COLLECTION
+    // =========================================================================
+    match /entitlements/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // =========================================================================
+    // AUDIT LOG COLLECTION
+    // =========================================================================
+    match /audit_log/{logId} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // PROCESSED EVENTS COLLECTION
+    // =========================================================================
+    match /processed_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

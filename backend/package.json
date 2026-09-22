@@ -1,0 +1,33 @@
+{
+  "name": "thought-catcher-backend",
+  "version": "1.0.0",
+  "description": "Clean, production-ready backend for Thought Catcher - Firestore, Cloud Functions, Groq AI, RevenueCat, and Security Rules",
+  "scripts": {
+    "build": "npm --prefix functions run build",
+    "lint": "npm --prefix functions run lint",
+    "test": "npm --prefix functions test",
+    "verify": "node scripts/verify-backend.js",
+    "verify:backend": "node scripts/verify-backend.js",
+    "verify:groq": "node scripts/verify-groq.js",
+    "emulators": "firebase emulators:start",
+    "emulators:export": "firebase emulators:start --export-on-exit=./emulator-data",
+    "seed": "node emulator/seed.js",
+    "deploy": "firebase deploy",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "keywords": [
+    "thought-catcher",
+    "firebase",
+    "cloud-functions",
+    "firestore",
+    "groq",
+    "revenuecat"
+  ],
+  "author": "Thought Catcher Engineering",
+  "license": "UNLICENSED"
+}
